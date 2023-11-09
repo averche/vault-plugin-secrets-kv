@@ -59,6 +59,11 @@ func LeaseSwitchedPassthroughBackend(ctx context.Context, conf *logical.BackendC
 						Type:        framework.TypeString,
 						Description: "Location of the secret.",
 					},
+					"recurse": {
+						Type:        framework.TypeBool,
+						Description: "If true, the contents of the given path will be listed recursively.",
+						Query:       true,
+					},
 				},
 
 				TakesArbitraryInput: true,
@@ -291,14 +296,18 @@ func (b *PassthroughBackend) handleList() framework.OperationFunc {
 			path = path + "/"
 		}
 
-		// List the keys at the prefix given by the request
-		keys, err := req.Storage.List(ctx, path)
-		if err != nil {
-			return nil, err
+		var (
+			keys []string
+			err  error
+		)
+		if recurse, ok := data.GetOk("recurse"); ok && recurse.(bool) {
+			keys, err = listRecursively(ctx, req.Storage, path, "")
+		} else {
+			keys, err = req.Storage.List(ctx, path)
 		}
 
 		// Generate the response
-		return logical.ListResponse(keys), nil
+		return logical.ListResponse(keys), err
 	}
 }
 
