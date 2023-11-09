@@ -63,6 +63,11 @@ User-provided key-value pairs that are used to describe arbitrary and
 version-agnostic information about a secret.
 `,
 			},
+			"recurse": {
+				Type:        framework.TypeBool,
+				Description: "If true, the contents of the given path will be listed recursively.",
+				Query:       true,
+			},
 		},
 
 		Operations: map[logical.Operation]framework.OperationHandler{
@@ -201,10 +206,17 @@ func (b *versionedKVBackend) pathMetadataList() framework.OperationFunc {
 			return nil, err
 		}
 
+		// Use encrypted key storage to list the keys
 		es := wrapper.Wrap(req.Storage)
 
-		// Use encrypted key storage to list the keys
-		keys, err := es.List(ctx, key)
+		var keys []string
+
+		if recurse, ok := data.GetOk("recurse"); ok && recurse.(bool) {
+			keys, err = listRecursively(ctx, es, key, "")
+		} else {
+			keys, err = es.List(ctx, key)
+		}
+
 		return logical.ListResponse(keys), err
 	}
 }

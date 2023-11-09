@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -467,6 +469,44 @@ func ptypesTimestampToString(t *timestamp.Timestamp) string {
 	}
 
 	return ptypes.TimestampString(t)
+}
+
+// listRecursively will recursively list the keys under the given path prefix.
+func listRecursively(ctx context.Context, storage logical.Storage, path, pathRel string) ([]string, error) {
+	keys, err := storage.List(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort the keys for a deterministic output
+	sort.Strings(keys)
+
+	var result []string
+
+	for _, k := range keys {
+		var (
+			childKey    = path + k
+			childKeyRel = pathRel + k // relative to the requested path
+		)
+		result = append(result, childKeyRel)
+
+		// If the key ends with a "/", it's a directory, so we should list its contents recurse
+		if strings.HasSuffix(k, "/") {
+			subKeys, err := listRecursively(
+				ctx,
+				storage,
+				childKey,
+				childKeyRel,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			result = append(result, subKeys...)
+		}
+	}
+
+	return result, nil
 }
 
 var backendHelp string = `
